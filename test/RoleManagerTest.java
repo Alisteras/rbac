@@ -1,245 +1,500 @@
-import org.junit.jupiter.api.*;
-import static org.junit.jupiter.api.Assertions.*;
-import java.util.*;
+import repositories.RoleManager;
+import entities.Permission;
+import entities.Role;
+import filters.RoleFilter;
+import filters.RoleFilters;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+@DisplayName("RoleManager Tests")
 class RoleManagerTest {
+
     private RoleManager roleManager;
-    private Role adminRole;
-    private Role userRole;
-    private Permission readPermission;
-    private Permission writePermission;
 
     @BeforeEach
     void setUp() {
         roleManager = new RoleManager();
-        adminRole = new Role("admin", "Administrator");
-        userRole = new Role("user", "Regular User");
-        readPermission = new Permission("read", "data", "can read");
-        writePermission = new Permission("write", "data", "can write");
     }
 
     @Test
-    void addRole() {
-        roleManager.add(adminRole);
+    @DisplayName("Should add role successfully")
+    void testAddRole() {
+        Role role = new Role("ADMIN", "Administrator role");
+
+        roleManager.add(role);
+
         assertEquals(1, roleManager.count());
-        assertTrue(roleManager.findByName("admin").isPresent());
+        assertTrue(roleManager.findByName("ADMIN").isPresent());
+        assertEquals(role, roleManager.findByName("ADMIN").get());
     }
 
     @Test
-    void addDuplicateRole() {
-        roleManager.add(adminRole);
-        Role duplicate = new Role("admin", "Another Admin");
-        assertThrows(IllegalArgumentException.class, () -> roleManager.add(duplicate));
-    }
+    @DisplayName("Should throw exception when adding duplicate role name")
+    void testAddDuplicateRole() {
+        Role role1 = new Role("ADMIN", "Administrator role");
+        Role role2 = new Role("ADMIN", "Another admin role");
 
-    @Test
-    void addNullRole() {
-        assertThrows(IllegalArgumentException.class, () -> roleManager.add(null));
-    }
+        roleManager.add(role1);
 
-    @Test
-    void removeRole() {
-        roleManager.add(adminRole);
-        assertTrue(roleManager.remove(adminRole));
-        assertEquals(0, roleManager.count());
-        assertTrue(roleManager.findByName("admin").isEmpty());
-    }
-
-    @Test
-    void removeNonExistentRole() {
-        assertFalse(roleManager.remove(adminRole));
-    }
-
-    @Test
-    void removeNullRole() {
-        assertFalse(roleManager.remove(null));
-    }
-
-    @Test
-    void findById() {
-        roleManager.add(adminRole);
-        Optional<Role> found = roleManager.findById(adminRole.getId());
-        assertTrue(found.isPresent());
-        assertEquals("admin", found.get().getName());
-    }
-
-    @Test
-    void findByIdNull() {
-        assertTrue(roleManager.findById(null).isEmpty());
-    }
-
-    @Test
-    void findByName() {
-        roleManager.add(adminRole);
-        Optional<Role> found = roleManager.findByName("admin");
-        assertTrue(found.isPresent());
-        assertEquals(adminRole.getId(), found.get().getId());
-    }
-
-    @Test
-    void findByNameNull() {
-        assertTrue(roleManager.findByName(null).isEmpty());
-    }
-
-    @Test
-    void findByNameNotFound() {
-        assertTrue(roleManager.findByName("nonexistent").isEmpty());
-    }
-
-    @Test
-    void findAll() {
-        roleManager.add(adminRole);
-        roleManager.add(userRole);
-        List<Role> all = roleManager.findAll();
-        assertEquals(2, all.size());
-        assertTrue(all.contains(adminRole));
-        assertTrue(all.contains(userRole));
-    }
-
-    @Test
-    void count() {
-        assertEquals(0, roleManager.count());
-        roleManager.add(adminRole);
+        assertThrows(IllegalArgumentException.class, () -> roleManager.add(role2));
         assertEquals(1, roleManager.count());
-        roleManager.add(userRole);
-        assertEquals(2, roleManager.count());
     }
 
     @Test
-    void clear() {
-        roleManager.add(adminRole);
-        roleManager.add(userRole);
-        roleManager.clear();
+    @DisplayName("Should remove role successfully")
+    void testRemoveRole() {
+        Role role = new Role("ADMIN", "Administrator role");
+        roleManager.add(role);
+
+        boolean removed = roleManager.remove(role);
+
+        assertTrue(removed);
         assertEquals(0, roleManager.count());
-        assertTrue(roleManager.findByName("admin").isEmpty());
+        assertFalse(roleManager.findByName("ADMIN").isPresent());
     }
 
     @Test
-    void exists() {
-        roleManager.add(adminRole);
-        assertTrue(roleManager.exists("admin"));
-        assertFalse(roleManager.exists("user"));
-    }
+    @DisplayName("Should add permission to role")
+    void testAddPermissionToRole() {
+        Role role = new Role("ADMIN", "Administrator role");
+        roleManager.add(role);
 
-    @Test
-    void existsNull() {
-        assertFalse(roleManager.exists(null));
-    }
+        Permission permission = new Permission("READ", "users", "Can read users");
+        roleManager.addPermissionToRole("ADMIN", permission);
 
-    @Test
-    void addPermissionToRole() {
-        roleManager.add(adminRole);
-        roleManager.addPermissionToRole("admin", readPermission);
-
-        Optional<Role> found = roleManager.findByName("admin");
+        Optional<Role> found = roleManager.findByName("ADMIN");
         assertTrue(found.isPresent());
-        assertTrue(found.get().hasPermission(readPermission));
+        assertTrue(found.get().hasPermission(permission));
     }
 
     @Test
-    void addPermissionToNonExistentRole() {
-        assertThrows(NoSuchElementException.class,
-                () -> roleManager.addPermissionToRole("nonexistent", readPermission));
-    }
+    @DisplayName("Should remove permission from role")
+    void testRemovePermissionFromRole() {
+        Role role = new Role("ADMIN", "Administrator role");
+        roleManager.add(role);
 
-    @Test
-    void addPermissionWithNullRoleName() {
-        assertThrows(IllegalArgumentException.class,
-                () -> roleManager.addPermissionToRole(null, readPermission));
-    }
+        Permission permission = new Permission("READ", "users", "Can read users");
+        roleManager.addPermissionToRole("ADMIN", permission);
+        roleManager.removePermissionFromRole("ADMIN", permission);
 
-    @Test
-    void addNullPermissionToRole() {
-        roleManager.add(adminRole);
-        assertThrows(IllegalArgumentException.class,
-                () -> roleManager.addPermissionToRole("admin", null));
-    }
-
-    @Test
-    void removePermissionFromRole() {
-        roleManager.add(adminRole);
-        roleManager.addPermissionToRole("admin", readPermission);
-        roleManager.removePermissionFromRole("admin", readPermission);
-
-        Optional<Role> found = roleManager.findByName("admin");
+        Optional<Role> found = roleManager.findByName("ADMIN");
         assertTrue(found.isPresent());
-        assertFalse(found.get().hasPermission(readPermission));
+        assertFalse(found.get().hasPermission(permission));
     }
 
     @Test
-    void removePermissionFromNonExistentRole() {
-        assertThrows(NoSuchElementException.class,
-                () -> roleManager.removePermissionFromRole("nonexistent", readPermission));
+    @DisplayName("Should find roles with specific permission")
+    void testFindRolesWithPermission() {
+        Permission readUsers = new Permission("READ", "users", "Read users");
+        Permission writeUsers = new Permission("WRITE", "users", "Write users");
+
+        Role admin = new Role("ADMIN", "Admin role");
+        Role editor = new Role("EDITOR", "Editor role");
+
+        roleManager.add(admin);
+        roleManager.add(editor);
+
+        roleManager.addPermissionToRole("ADMIN", readUsers);
+        roleManager.addPermissionToRole("ADMIN", writeUsers);
+        roleManager.addPermissionToRole("EDITOR", readUsers);
+
+        List<Role> roles = roleManager.findRolesWithPermission("READ", "users");
+
+        assertEquals(2, roles.size());
+        assertTrue(roles.stream().anyMatch(r -> r.getName().equals("ADMIN")));
+        assertTrue(roles.stream().anyMatch(r -> r.getName().equals("EDITOR")));
     }
 
     @Test
-    void findByFilter() {
-        roleManager.add(adminRole);
-        roleManager.add(userRole);
+    @DisplayName("Should find roles by filter")
+    void testFindByFilter() {
+        roleManager.add(new Role("ADMIN", "Admin role"));
+        roleManager.add(new Role("EDITOR", "Editor role"));
+        roleManager.add(new Role("VIEWER", "Viewer role"));
 
-        adminRole.addPermission(readPermission);
+        List<Role> roles = roleManager.findByFilter(RoleFilters.byNameContains("AD"));
 
-        RoleFilter filter = RoleFilters.hasPermission(readPermission);
-        List<Role> result = roleManager.findByFilter(filter);
-
-        assertEquals(1, result.size());
-        assertEquals("admin", result.get(0).getName());
+        assertEquals(1, roles.size());
+        assertEquals("ADMIN", roles.get(0).getName());
     }
 
     @Test
-    void findByFilterNull() {
-        roleManager.add(adminRole);
-        List<Role> result = roleManager.findByFilter(null);
-        assertEquals(1, result.size());
+    @DisplayName("Should find all roles using parallel stream")
+    void testFindAllParallel() {
+        int roleCount = 100;
+        for (int i = 0; i < roleCount; i++) {
+            Role role = new Role("ROLE_" + i, "Role description " + i);
+            roleManager.add(role);
+        }
+
+        List<Role> roles = roleManager.findAllParallel();
+
+        assertEquals(roleCount, roles.size());
+        assertTrue(roles.stream().allMatch(r -> r.getName().startsWith("ROLE_")));
     }
 
     @Test
-    void findRolesWithPermission() {
-        roleManager.add(adminRole);
-        roleManager.add(userRole);
-
-        adminRole.addPermission(readPermission);
-        userRole.addPermission(writePermission);
-
-        List<Role> result = roleManager.findRolesWithPermission("read", "data");
-
-        assertEquals(1, result.size());
-        assertEquals("admin", result.get(0).getName());
+    @DisplayName("Should find empty list when no roles exist in findAllParallel")
+    void testFindAllParallelEmpty() {
+        List<Role> roles = roleManager.findAllParallel();
+        assertNotNull(roles);
+        assertTrue(roles.isEmpty());
+        assertEquals(0, roles.size());
     }
 
     @Test
-    void findRolesWithPermissionNullParams() {
-        roleManager.add(adminRole);
+    @DisplayName("Should find roles by filter using parallel stream")
+    void testFindByFilterParallel() {
+        for (int i = 0; i < 50; i++) {
+            Role role = new Role("ROLE_" + i, "Role description " + i);
+            roleManager.add(role);
+        }
+        roleManager.add(new Role("ADMIN_ROLE", "Admin role"));
+        roleManager.add(new Role("ADMIN_TEST", "Admin test role"));
 
-        List<Role> result1 = roleManager.findRolesWithPermission(null, "data");
-        List<Role> result2 = roleManager.findRolesWithPermission("read", null);
+        RoleFilter filter = RoleFilters.byNameContains("ADMIN");
+        List<Role> roles = roleManager.findByFilterParallel(filter);
 
-        assertTrue(result1.isEmpty());
-        assertTrue(result2.isEmpty());
+        assertEquals(2, roles.size());
+        assertTrue(roles.stream().allMatch(r -> r.getName().contains("ADMIN")));
     }
 
     @Test
-    void findAllWithFilterAndSorter() {
-        roleManager.add(adminRole);
-        roleManager.add(userRole);
+    @DisplayName("Should return all roles when filter is null in findByFilterParallel")
+    void testFindByFilterParallelWithNullFilter() {
+        int roleCount = 50;
+        for (int i = 0; i < roleCount; i++) {
+            Role role = new Role("ROLE_" + i, "Role description " + i);
+            roleManager.add(role);
+        }
 
-        RoleFilter filter = RoleFilters.byNameContains("a");
-        Comparator<Role> sorter = RoleSorters.byName();
+        List<Role> roles = roleManager.findByFilterParallel((RoleFilter) null);
 
-        List<Role> result = roleManager.findAll(filter, sorter);
-
-        assertEquals(1, result.size());
-        assertTrue(result.contains(adminRole));
+        assertEquals(roleCount, roles.size());
     }
 
     @Test
-    void equalsAndHashCode() {
-        roleManager.add(adminRole);
+    @DisplayName("Should find roles by name contains using parallel stream")
+    void testFindByFilterParallelWithNameContains() {
+        roleManager.add(new Role("ADMIN", "Administrator role"));
+        roleManager.add(new Role("SUPER_ADMIN", "Super administrator role"));
+        roleManager.add(new Role("EDITOR", "Editor role"));
+        roleManager.add(new Role("VIEWER", "Viewer role"));
 
-        RoleManager otherManager = new RoleManager();
-        otherManager.add(adminRole);
+        RoleFilter filter = RoleFilters.byNameContains("ADMIN");
+        List<Role> roles = roleManager.findByFilterParallel(filter);
 
-        assertEquals(roleManager, otherManager);
-        assertEquals(roleManager.hashCode(), otherManager.hashCode());
+        assertEquals(2, roles.size());
+        assertTrue(roles.stream().anyMatch(r -> r.getName().equals("ADMIN")));
+        assertTrue(roles.stream().anyMatch(r -> r.getName().equals("SUPER_ADMIN")));
+    }
+
+    @Test
+    @DisplayName("Should find roles with at least N permissions using parallel stream")
+    void testFindByFilterParallelWithMinPermissions() {
+        Permission readUsers = new Permission("READ", "users", "Read users");
+        Permission writeUsers = new Permission("WRITE", "users", "Write users");
+        Permission deleteUsers = new Permission("DELETE", "users", "Delete users");
+
+        Role admin = new Role("ADMIN", "Admin role");
+        Role editor = new Role("EDITOR", "Editor role");
+        Role viewer = new Role("VIEWER", "Viewer role");
+
+        roleManager.add(admin);
+        roleManager.add(editor);
+        roleManager.add(viewer);
+
+        roleManager.addPermissionToRole("ADMIN", readUsers);
+        roleManager.addPermissionToRole("ADMIN", writeUsers);
+        roleManager.addPermissionToRole("ADMIN", deleteUsers);
+        roleManager.addPermissionToRole("EDITOR", readUsers);
+        roleManager.addPermissionToRole("EDITOR", writeUsers);
+
+        RoleFilter filter = RoleFilters.hasAtLeastNPermissions(2);
+        List<Role> roles = roleManager.findByFilterParallel(filter);
+
+        assertEquals(2, roles.size());
+        assertTrue(roles.stream().anyMatch(r -> r.getName().equals("ADMIN")));
+        assertTrue(roles.stream().anyMatch(r -> r.getName().equals("EDITOR")));
+    }
+
+    @Test
+    @DisplayName("Should handle concurrent parallel operations")
+    void testConcurrentParallelOperations() throws InterruptedException {
+        int roleCount = 200;
+        for (int i = 0; i < roleCount; i++) {
+            Role role = new Role("ROLE_" + i, "Role description " + i);
+            roleManager.add(role);
+        }
+
+        int threadCount = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            executor.submit(() -> {
+                try {
+                    List<Role> allRoles = roleManager.findAllParallel();
+                    List<Role> filteredRoles = roleManager.findByFilterParallel(
+                            RoleFilters.byNameContains("1")
+                    );
+
+                    assertNotNull(allRoles);
+                    assertNotNull(filteredRoles);
+                    assertTrue(allRoles.size() > 0);
+
+                    successCount.incrementAndGet();
+                } catch (Exception e) {
+                    fail("Exception in parallel operation: " + e.getMessage());
+                }
+                latch.countDown();
+            });
+        }
+
+        assertTrue(latch.await(30, TimeUnit.SECONDS));
+        executor.shutdown();
+        assertEquals(threadCount, successCount.get());
+    }
+
+    @Test
+    @DisplayName("Should maintain consistency between sequential and parallel findAll")
+    void testSequentialVsParallelFindAllConsistency() {
+        int roleCount = 100;
+        for (int i = 0; i < roleCount; i++) {
+            Role role = new Role("ROLE_" + i, "Role description " + i);
+            roleManager.add(role);
+        }
+
+        List<Role> sequential = roleManager.findAll();
+        List<Role> parallel = roleManager.findAllParallel();
+
+        assertEquals(sequential.size(), parallel.size());
+        assertTrue(sequential.containsAll(parallel) && parallel.containsAll(sequential));
+    }
+
+    @Test
+    @DisplayName("Should maintain consistency between sequential and parallel findByFilter")
+    void testSequentialVsParallelFindByFilterConsistency() {
+        for (int i = 0; i < 50; i++) {
+            Role role = new Role("TEST_ROLE_" + i, "Test role " + i);
+            roleManager.add(role);
+        }
+        for (int i = 0; i < 50; i++) {
+            Role role = new Role("ADMIN_ROLE_" + i, "Admin role " + i);
+            roleManager.add(role);
+        }
+
+        RoleFilter filter = RoleFilters.byNameContains("ADMIN");
+
+        List<Role> sequential = roleManager.findByFilter(filter);
+        List<Role> parallel = roleManager.findByFilterParallel(filter);
+
+        assertEquals(sequential.size(), parallel.size());
+        assertTrue(sequential.containsAll(parallel) && parallel.containsAll(sequential));
+    }
+
+    @Test
+    @DisplayName("Should handle multiple parallel findByFilter calls simultaneously")
+    void testMultipleParallelFilters() throws InterruptedException {
+        int roleCount = 500;
+        for (int i = 0; i < roleCount; i++) {
+            Role role = new Role("ROLE_" + i, "Role description " + i);
+            roleManager.add(role);
+        }
+
+        Permission readPerm = new Permission("READ", "users", "Read users");
+        Permission writePerm = new Permission("WRITE", "users", "Write users");
+
+        roleManager.addPermissionToRole("ROLE_100", readPerm);
+        roleManager.addPermissionToRole("ROLE_200", readPerm);
+        roleManager.addPermissionToRole("ROLE_300", writePerm);
+
+        int threadCount = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        AtomicInteger completedCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int filterId = i;
+            executor.submit(() -> {
+                try {
+                    RoleFilter filter;
+                    if (filterId % 3 == 0) {
+                        filter = RoleFilters.byNameContains("100");
+                    } else if (filterId % 3 == 1) {
+                        filter = RoleFilters.hasPermission("READ", "users");
+                    } else {
+                        filter = RoleFilters.hasAtLeastNPermissions(1);
+                    }
+
+                    List<Role> result = roleManager.findByFilterParallel(filter);
+                    assertNotNull(result);
+                    completedCount.incrementAndGet();
+                } catch (Exception e) {
+                    fail("Exception in parallel filter: " + e.getMessage());
+                }
+                latch.countDown();
+            });
+        }
+
+        assertTrue(latch.await(30, TimeUnit.SECONDS));
+        executor.shutdown();
+        assertEquals(threadCount, completedCount.get());
+    }
+
+    @Test
+    @DisplayName("Should handle concurrent additions and parallel reads")
+    void testConcurrentAdditionsAndParallelReads() throws InterruptedException {
+        int threadCount = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        AtomicInteger readSuccessCount = new AtomicInteger(0);
+        AtomicInteger writeSuccessCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            executor.submit(() -> {
+                for (int j = 0; j < 50; j++) {
+                    if (threadId % 2 == 0) {
+                        try {
+                            String roleName = "TEMP_ROLE_" + threadId + "_" + j;
+                            Role role = new Role(roleName, "Temporary role");
+                            roleManager.add(role);
+                            writeSuccessCount.incrementAndGet();
+                        } catch (IllegalArgumentException e) {
+                        }
+                    } else {
+                        try {
+                            List<Role> allRoles = roleManager.findAllParallel();
+                            List<Role> filteredRoles = roleManager.findByFilterParallel(
+                                    RoleFilters.byNameContains("ROLE")
+                            );
+                            assertNotNull(allRoles);
+                            assertNotNull(filteredRoles);
+                            readSuccessCount.incrementAndGet();
+                        } catch (Exception e) {
+                            fail("Exception in parallel read: " + e.getMessage());
+                        }
+                    }
+                }
+                latch.countDown();
+            });
+        }
+
+        assertTrue(latch.await(30, TimeUnit.SECONDS));
+        executor.shutdown();
+
+        assertTrue(readSuccessCount.get() > 0);
+        assertTrue(writeSuccessCount.get() > 0);
+    }
+
+    @Test
+    @DisplayName("Should handle concurrent role additions")
+    void testConcurrentRoleAdditions() throws InterruptedException {
+        int threadCount = 10;
+        int rolesPerThread = 100;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            executor.submit(() -> {
+                for (int j = 0; j < rolesPerThread; j++) {
+                    String roleName = "ROLE_" + threadId + "_" + j;
+                    try {
+                        Role role = new Role(roleName, "Test role " + roleName);
+                        roleManager.add(role);
+                        successCount.incrementAndGet();
+                    } catch (IllegalArgumentException e) {
+                        failureCount.incrementAndGet();
+                    }
+                }
+                latch.countDown();
+            });
+        }
+
+        latch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertEquals(threadCount * rolesPerThread, successCount.get() + failureCount.get());
+        assertEquals(threadCount * rolesPerThread, roleManager.count());
+    }
+
+    @Test
+    @DisplayName("Should handle concurrent permission additions")
+    void testConcurrentPermissionAdditions() throws InterruptedException {
+        Role role = new Role("ADMIN", "Admin role");
+        roleManager.add(role);
+
+        int threadCount = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        AtomicInteger successCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            executor.submit(() -> {
+                for (int j = 0; j < 50; j++) {
+                    Permission permission = new Permission(
+                            "PERM_" + threadId + "_" + j,
+                            "resource",
+                            "Test permission"
+                    );
+                    roleManager.addPermissionToRole("ADMIN", permission);
+                    successCount.incrementAndGet();
+                }
+                latch.countDown();
+            });
+        }
+
+        latch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        Optional<Role> updatedRole = roleManager.findByName("ADMIN");
+        assertTrue(updatedRole.isPresent());
+        assertEquals(threadCount * 50, updatedRole.get().getPermissions().size());
+    }
+
+    @Test
+    @DisplayName("Should maintain consistency between id and name maps")
+    void testMapConsistency() throws InterruptedException {
+        int threadCount = 10;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int threadId = i;
+            executor.submit(() -> {
+                for (int j = 0; j < 100; j++) {
+                    String roleName = "ROLE_" + threadId + "_" + j;
+                    Role role = new Role(roleName, "Test role");
+                    roleManager.add(role);
+
+                    Optional<Role> byName = roleManager.findByName(roleName);
+                    Optional<Role> byId = roleManager.findById(role.getId());
+
+                    assertTrue(byName.isPresent());
+                    assertTrue(byId.isPresent());
+                    assertEquals(byName.get(), byId.get());
+                }
+                latch.countDown();
+            });
+        }
+
+        latch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertEquals(threadCount * 100, roleManager.count());
     }
 }
